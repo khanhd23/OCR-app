@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- C:/Fe Mobile OCR/app/src/main/res/values/themes.xml -->
+<resources>
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#07111F</item>
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="postSplashScreenTheme">@style/Theme.OCR</item>
+    </style>
+
+    <style name="Theme.OCR" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#07111F</item>
+        <item name="android:statusBarColor">#07111F</item>
+        <item name="android:navigationBarColor">#07111F</item>
+    </style>
+</resources>

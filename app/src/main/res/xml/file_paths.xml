@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-path name="external_files" path="." />
+    <external-cache-path name="external_cache" path="." />
+    <external-path name="my_downloads" path="Download/" />
+    <external-files-path name="ocr_exports" path="OCRExports/" />
+    <cache-path name="cache" path="." />
+    <external-cache-path name="external_cache" path="." />
+</paths>

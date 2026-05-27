@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OCR Pro</string>
+    <string name="ocr_start">Bắt đầu OCR</string>
+    <string name="camera_hint">Hướng camera vào văn bản</string>
+    <string name="capture">Chụp ảnh</string>
+    <string name="retake">Chụp lại</string>
+    <string name="gallery">Thư viện</string>
+    <string name="processing">Đang xử lý…</string>
+    <string name="copy_text">Sao chép văn bản</string>
+    <string name="export_word">Xuất Word</string>
+    <string name="history">Lịch sử</string>
+    <string name="no_documents">Chưa có tài liệu nào</string>
+    <string name="permission_camera">Cho phép dùng Camera</string>
+</resources>

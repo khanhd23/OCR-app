@@ -12,6 +12,7 @@ val Ink500 = Color(0xFF323D54)
 val Teal400 = Color(0xFF2DD4C8)
 val Teal300 = Color(0xFF5BE0D6)
 val Teal200 = Color(0xFF99EDE8)
+val Teal100 = Color(0xFFCCF6F4)
 val TealGlow = Color(0x402DD4C8)
 
 val Amber400 = Color(0xFFFBBF24)

@@ -4,11 +4,13 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import com.example.ocr.data.local.processor.MLKitProcessorImpl
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ocr.R
 import com.example.ocr.core.common.Resource
 import com.example.ocr.core.extension.toFile
+import com.example.ocr.data.local.processor.MLKitProcessorImpl
 import com.example.ocr.domain.model.OCRDocument
 import com.example.ocr.domain.repository.OCRRepository
 import com.example.ocr.domain.usecase.SaveDocumentUseCase
@@ -23,22 +25,15 @@ import javax.inject.Inject
 
 sealed class CameraUiState {
     object Idle : CameraUiState()
-
-    data class Preview(
-        val imageUri: Uri
-    ) : CameraUiState()
-
+    data class Preview(val imageUris: List<Uri>) : CameraUiState()
     data class Processing(
-        val message: String = "Đang nhận dạng văn bản..."
+        @StringRes val messageRes: Int,
+        val currentPage: Int = 0,
+        val totalPages: Int = 0,
+        val progress: Float = 0f
     ) : CameraUiState()
-
-    data class Success(
-        val documentId: Long
-    ) : CameraUiState()
-
-    data class Error(
-        val message: String
-    ) : CameraUiState()
+    data class Success(val documentId: Long) : CameraUiState()
+    data class Error(val message: String) : CameraUiState()
 }
 
 @HiltViewModel
@@ -48,127 +43,107 @@ class CameraViewModel @Inject constructor(
     private val mlKit: MLKitProcessorImpl
 ) : ViewModel() {
 
-    private var capturedBitmap: Bitmap? = null
+    private val _uiState = MutableStateFlow<CameraUiState>(CameraUiState.Idle)
+    val uiState: StateFlow<CameraUiState> = _uiState.asStateFlow()
 
-    private val _uiState =
-        MutableStateFlow<CameraUiState>(CameraUiState.Idle)
+    private val selectedBitmaps = mutableListOf<Bitmap>()
+    private val selectedUris = mutableListOf<Uri>()
 
-    val uiState: StateFlow<CameraUiState> =
-        _uiState.asStateFlow()
     init {
         viewModelScope.launch(Dispatchers.Default) {
             mlKit.warmup()
         }
     }
-    fun onImageCaptured(context: Context, uri: Uri) {
+
+    fun onImagesSelected(context: Context, uris: List<Uri>) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val options = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.RGB_565
-                }
-
-                val bitmap =
+                clearPreviousSelection()
+                selectedUris.addAll(uris)
+                
+                uris.forEach { uri ->
+                    val options = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    }
                     context.contentResolver.openInputStream(uri)?.use {
                         BitmapFactory.decodeStream(it, null, options)
-                    } ?: run {
-                        _uiState.value =
-                            CameraUiState.Error("Không đọc được ảnh")
-                        return@launch
-                    }
+                    }?.let { selectedBitmaps.add(it) }
+                }
 
-                recyclePreviousBitmap()
-
-                capturedBitmap = bitmap
-
-                _uiState.value =
-                    CameraUiState.Preview(uri)
-
+                _uiState.value = CameraUiState.Preview(selectedUris.toList())
             } catch (e: Exception) {
-                _uiState.value =
-                    CameraUiState.Error(
-                        e.message ?: "Lỗi không xác định"
-                    )
+                _uiState.value = CameraUiState.Error(e.message ?: "Lỗi tải ảnh")
             }
         }
     }
 
-    fun onImageSelected(context: Context, uri: Uri) {
-        onImageCaptured(context, uri)
+    fun onImageCaptured(context: Context, uri: Uri) {
+        onImagesSelected(context, listOf(uri))
     }
 
     fun performOCR(context: Context) {
-        val current =
-            _uiState.value as? CameraUiState.Preview ?: return
-
-        val bitmap =
-            capturedBitmap ?: return
+        if (selectedBitmaps.isEmpty()) return
 
         viewModelScope.launch {
-            _uiState.value =
-                CameraUiState.Processing(
-                    "Đang phân tích bố cục ảnh..."
+            val totalPages = selectedBitmaps.size
+            val fullTexts = mutableListOf<String>()
+            val firstImagePath = selectedUris.firstOrNull()?.toFile(context)?.absolutePath ?: ""
+
+            _uiState.value = CameraUiState.Processing(R.string.processing, 0, totalPages, 0f)
+
+            var successCount = 0
+            selectedBitmaps.forEachIndexed { index, bitmap ->
+                val pageNum = index + 1
+                _uiState.value = CameraUiState.Processing(
+                    R.string.processing, 
+                    pageNum, 
+                    totalPages, 
+                    index.toFloat() / totalPages
                 )
 
-            val result = withContext(Dispatchers.Default) {
-                ocrRepository.uploadBitmap(bitmap, 0)
+                val result = withContext(Dispatchers.Default) {
+                    ocrRepository.uploadBitmap(bitmap, index)
+                }
+
+                if (result is Resource.Success) {
+                    fullTexts.add(result.data?.fullText ?: "")
+                    successCount++
+                } else if (result is Resource.Error && totalPages == 1) {
+                    _uiState.value = CameraUiState.Error(result.message ?: "OCR Error")
+                    return@launch
+                }
             }
 
-            when (result) {
-                is Resource.Success -> {
-                    _uiState.value =
-                        CameraUiState.Processing(
-                            "Đang lưu kết quả..."
-                        )
-
-                    val ocrResult = result.data!!
-                    val imageFile = current.imageUri.toFile(context)
-
-                    val document = OCRDocument(
-                        title = "Tài liệu ${System.currentTimeMillis() / 1000}",
-                        fullText = ocrResult.fullText,
-                        imagePath = imageFile?.absolutePath ?: "",
-                        ocrResult = ocrResult
-                    )
-
-                    val id =
-                        saveDocumentUseCase(document)
-
-                    recyclePreviousBitmap()
-
-                    _uiState.value =
-                        CameraUiState.Success(id)
-                }
-
-                is Resource.Error -> {
-                    recyclePreviousBitmap()
-
-                    _uiState.value =
-                        CameraUiState.Error(
-                            result.message ?: "OCR thất bại"
-                        )
-                }
-
-                else -> {}
+            if (successCount > 0) {
+                val combinedText = fullTexts.joinToString("\n\n----------------------------\n\n")
+                val document = OCRDocument(
+                    title = "Scan ${System.currentTimeMillis() / 1000}",
+                    fullText = combinedText,
+                    imagePath = firstImagePath,
+                    pageCount = totalPages
+                )
+                val id = saveDocumentUseCase(document)
+                clearPreviousSelection()
+                _uiState.value = CameraUiState.Success(id)
+            } else {
+                _uiState.value = CameraUiState.Error("Failed to recognize any page")
             }
         }
     }
 
     fun retake() {
-        recyclePreviousBitmap()
+        clearPreviousSelection()
         _uiState.value = CameraUiState.Idle
     }
 
-    private fun recyclePreviousBitmap() {
-        capturedBitmap?.let {
-            if (!it.isRecycled) {
-                it.recycle()
-            }
-        }
-        capturedBitmap = null
+    private fun clearPreviousSelection() {
+        selectedBitmaps.forEach { if (!it.isRecycled) it.recycle() }
+        selectedBitmaps.clear()
+        selectedUris.clear()
     }
 
     override fun onCleared() {
-        recyclePreviousBitmap()
+        clearPreviousSelection()
         super.onCleared()
     }
 }

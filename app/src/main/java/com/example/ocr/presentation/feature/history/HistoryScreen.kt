@@ -16,13 +16,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.ocr.R
 import com.example.ocr.domain.model.OCRDocument
-import com.example.ocr.presentation.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -41,20 +43,17 @@ fun HistoryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Ink900)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
     ) {
-        // Top bar
         HistoryTopBar(onBack = onNavigateBack, count = documents.size)
 
-        // Search bar
         SearchBar(
             query = searchQuery,
             onQueryChange = viewModel::onSearchQueryChange,
             isSearching = isSearching
         )
 
-        // Content
         when {
             documents.isEmpty() && searchQuery.isBlank() -> EmptyHistoryState()
             documents.isEmpty() && searchQuery.isNotBlank() -> NoSearchResult(query = searchQuery)
@@ -77,24 +76,16 @@ private fun HistoryTopBar(onBack: () -> Unit, count: Int) {
     ) {
         IconButton(
             onClick = onBack,
-            modifier = Modifier.size(40.dp).background(SurfaceCard, CircleShape)
+            modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
         ) {
-            Icon(Icons.Filled.ArrowBack, null, tint = TextPrimary)
+            Icon(Icons.Filled.ArrowBack, null, tint = MaterialTheme.colorScheme.onSurface)
         }
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("Lịch sử quét", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text(stringResource(R.string.history), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             if (count > 0) {
-                Text("$count tài liệu", color = TextHint, fontSize = 12.sp)
+                Text(stringResource(R.string.documents_count, count), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
             }
-        }
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(TealGlow)
-                .padding(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            Text("$count", color = Teal400, fontWeight = FontWeight.Bold, fontSize = 13.sp)
         }
     }
 }
@@ -110,19 +101,19 @@ private fun SearchBar(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(SurfaceCard)
-            .border(1.dp, SurfaceBorder, RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
             .padding(horizontal = 14.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (isSearching) {
             CircularProgressIndicator(
-                color = Teal400,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp),
                 strokeWidth = 2.dp
             )
         } else {
-            Icon(Icons.Outlined.Search, null, tint = TextHint, modifier = Modifier.size(20.dp))
+            Icon(Icons.Outlined.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(10.dp))
         BasicTextField(
@@ -130,22 +121,14 @@ private fun SearchBar(
             onValueChange = onQueryChange,
             modifier = Modifier.weight(1f),
             singleLine = true,
-            textStyle = androidx.compose.ui.text.TextStyle(color = TextPrimary, fontSize = 14.sp),
+            textStyle = androidx.compose.ui.text.TextStyle(color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp),
             decorationBox = { inner ->
                 if (query.isEmpty()) {
-                    Text("Tìm kiếm tài liệu...", color = TextHint, fontSize = 14.sp)
+                    Text(stringResource(R.string.search_hint), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                 }
                 inner()
             }
         )
-        if (query.isNotBlank()) {
-            IconButton(
-                onClick = { onQueryChange("") },
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(Icons.Filled.Close, null, tint = TextHint, modifier = Modifier.size(16.dp))
-            }
-        }
     }
 }
 
@@ -178,7 +161,7 @@ private fun DocumentList(
                 enableDismissFromStartToEnd = false,
                 backgroundContent = {
                     val color = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart)
-                        ErrorRed.copy(alpha = 0.2f) else Color.Transparent
+                        MaterialTheme.colorScheme.errorContainer else Color.Transparent
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -186,13 +169,8 @@ private fun DocumentList(
                             .background(color),
                         contentAlignment = Alignment.CenterEnd
                     ) {
-                        Row(
-                            modifier = Modifier.padding(end = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Outlined.Delete, null, tint = ErrorRed, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Xoá", color = ErrorRed, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        Row(modifier = Modifier.padding(end = 20.dp)) {
+                            Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -213,57 +191,36 @@ private fun DocumentCard(doc: OCRDocument, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(SurfaceCard)
-            .border(1.dp, SurfaceBorder, RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
             .clickable { onClick() }
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Icon
         Box(
             modifier = Modifier
                 .size(46.dp)
-                .background(TealGlow, RoundedCornerShape(12.dp)),
+                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                Icons.Outlined.Description,
-                null,
-                tint = Teal400,
-                modifier = Modifier.size(24.dp)
-            )
+            Icon(Icons.Outlined.Description, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(24.dp))
         }
 
         Spacer(Modifier.width(14.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                doc.title,
-                color = TextPrimary,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Text(doc.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
-            Text(
-                doc.fullText.take(80).replace("\n", " "),
-                color = TextSecondary,
-                fontSize = 12.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 18.sp
-            )
+            Text(doc.fullText.take(80).replace("\n", " "), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MiniTag("$lineCount dòng")
-                MiniTag("$wordCount từ")
+                MiniTag(stringResource(R.string.lines_count) + ": $lineCount")
+                MiniTag(stringResource(R.string.words_count) + ": $wordCount")
                 MiniTag(dateStr)
             }
         }
 
-        Spacer(Modifier.width(8.dp))
-        Icon(Icons.Filled.ChevronRight, null, tint = TextHint, modifier = Modifier.size(20.dp))
+        Icon(Icons.Filled.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
     }
 }
 
@@ -272,44 +229,27 @@ private fun MiniTag(text: String) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(Ink700)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
-        Text(text, color = TextHint, fontSize = 10.sp)
+        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
     }
 }
 
 @Composable
 private fun EmptyHistoryState() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            Icons.Outlined.HistoryToggleOff,
-            null,
-            tint = TextHint,
-            modifier = Modifier.size(72.dp)
-        )
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Outlined.HistoryToggleOff, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(72.dp))
         Spacer(Modifier.height(16.dp))
-        Text("Chưa có tài liệu nào", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(6.dp))
-        Text("Các tài liệu đã quét sẽ xuất hiện ở đây", color = TextHint, fontSize = 13.sp)
+        Text(stringResource(R.string.no_documents), color = MaterialTheme.colorScheme.onSurface, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
 private fun NoSearchResult(query: String) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(Icons.Outlined.SearchOff, null, tint = TextHint, modifier = Modifier.size(56.dp))
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Outlined.SearchOff, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(56.dp))
         Spacer(Modifier.height(16.dp))
-        Text("Không tìm thấy kết quả", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(6.dp))
-        Text("Không có tài liệu nào khớp với \"$query\"", color = TextHint, fontSize = 13.sp)
+        Text(stringResource(R.string.no_search_result, query), color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp))
     }
 }

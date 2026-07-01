@@ -12,9 +12,12 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,7 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -40,10 +45,10 @@ import coil.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.example.ocr.R
 import com.example.ocr.core.common.Constants
 import com.example.ocr.presentation.component.CameraOverlay
 import com.example.ocr.presentation.component.LoadingView
-import com.example.ocr.presentation.theme.*
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -59,11 +64,12 @@ fun CameraScreen(
     val uiState by viewModel.uiState.collectAsState()
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
 
-    // Gallery picker
     val galleryLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { viewModel.onImageSelected(context, it) }
+        ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            viewModel.onImagesSelected(context, uris)
+        }
     }
 
     LaunchedEffect(uiState) {
@@ -72,7 +78,7 @@ fun CameraScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Ink900)) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         when (val state = uiState) {
             is CameraUiState.Idle -> {
                 if (cameraPermission.status.isGranted) {
@@ -91,19 +97,42 @@ fun CameraScreen(
             }
             is CameraUiState.Preview -> {
                 ImagePreviewContent(
-                    imageUri = state.imageUri,
+                    imageUris = state.imageUris,
                     onOCR = { viewModel.performOCR(context) },
                     onRetake = { viewModel.retake() }
                 )
             }
             is CameraUiState.Processing -> {
-                LoadingView(state.message)
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = stringResource(state.messageRes),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (state.totalPages > 1) {
+                            Text(
+                                text = stringResource(R.string.page_info, state.currentPage, state.totalPages),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        LinearProgressIndicator(
+                            progress = { state.progress },
+                            modifier = Modifier.width(200.dp).height(6.dp).clip(RoundedCornerShape(3.dp)),
+                        )
+                    }
+                }
             }
             is CameraUiState.Error -> {
                 ErrorContent(message = state.message, onRetry = { viewModel.retake() })
             }
             is CameraUiState.Success -> {
-                LoadingView("Hoàn tất!")
+                LoadingView(stringResource(R.string.completed))
             }
         }
     }
@@ -120,16 +149,14 @@ private fun CameraPreviewContent(
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
 
     var imageCapture: ImageCapture? by remember { mutableStateOf(null) }
-    var camera: Camera? by remember { mutableStateOf(null) }   // ← thêm để điều khiển torch
+    var camera: Camera? by remember { mutableStateOf(null) }
     var flashEnabled by remember { mutableStateOf(false) }
 
-    // Flashlight  on/off
     LaunchedEffect(flashEnabled) {
         camera?.cameraControl?.enableTorch(flashEnabled)
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Camera preview
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
                 val previewView = PreviewView(ctx)
@@ -145,7 +172,7 @@ private fun CameraPreviewContent(
                     imageCapture = capture
                     try {
                         cameraProvider.unbindAll()
-                        camera = cameraProvider.bindToLifecycle(  // ← gán camera
+                        camera = cameraProvider.bindToLifecycle(
                             lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, capture
                         )
                     } catch (e: Exception) {
@@ -157,286 +184,144 @@ private fun CameraPreviewContent(
             modifier = Modifier.fillMaxSize()
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(top = 70.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize().statusBarsPadding().padding(top = 70.dp)) {
             CameraOverlay()
         }
 
-        // Top bar
         Row(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-            ) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "Quay lại", tint = White)
+            IconButton(onClick = onBack, modifier = Modifier.size(44.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = null, tint = Color.White)
             }
-
-            Text(
-                "Hướng camera vào văn bản",
-                color = White.copy(alpha = 0.8f),
-                fontSize = 13.sp,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            )
-
+            Text(stringResource(R.string.camera_hint), color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp, modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 6.dp))
             Box(modifier = Modifier.size(44.dp))
         }
 
-        // Bottom controls
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))
-                )
-                .padding(vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Gallery button
-                IconButton(
-                    onClick = onGalleryClick,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .background(SurfaceCard.copy(alpha = 0.8f), RoundedCornerShape(14.dp))
-                        .border(1.dp, SurfaceBorder, RoundedCornerShape(14.dp))
-                ) {
-                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = "Thư viện", tint = White)
+        Column(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))).padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onGalleryClick, modifier = Modifier.size(52.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(14.dp)).border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(14.dp))) {
+                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, tint = Color.White)
                 }
 
-                // Shutter button
                 Box(contentAlignment = Alignment.Center) {
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .border(3.dp, White.copy(alpha = 0.6f), CircleShape)
-                    )
+                    Box(modifier = Modifier.size(80.dp).border(3.dp, Color.White.copy(alpha = 0.6f), CircleShape))
                     IconButton(
                         onClick = {
                             val ic = imageCapture ?: return@IconButton
-                            val name = SimpleDateFormat(Constants.FILENAME_FORMAT, Locale.getDefault())
-                                .format(System.currentTimeMillis())
-                            val contentValues = ContentValues().apply {
-                                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                            }
-                            val outputOptions = ImageCapture.OutputFileOptions.Builder(
-                                context.contentResolver,
-                                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                                contentValues
-                            ).build()
-                            ic.takePicture(
-                                outputOptions, cameraExecutor,
-                                object : ImageCapture.OnImageSavedCallback {
-                                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                        output.savedUri?.let { onPhotoTaken(it) }
-                                    }
-                                    override fun onError(exc: ImageCaptureException) {
-                                        Log.e("CameraScreen", "Capture error", exc)
-                                    }
-                                }
-                            )
+                            val name = SimpleDateFormat(Constants.FILENAME_FORMAT, Locale.getDefault()).format(System.currentTimeMillis())
+                            val contentValues = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, name); put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg") }
+                            val outputOptions = ImageCapture.OutputFileOptions.Builder(context.contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues).build()
+                            ic.takePicture(outputOptions, cameraExecutor, object : ImageCapture.OnImageSavedCallback {
+                                override fun onImageSaved(output: ImageCapture.OutputFileResults) { output.savedUri?.let { onPhotoTaken(it) } }
+                                override fun onError(exc: ImageCaptureException) { Log.e("CameraScreen", "Capture error", exc) }
+                            })
                         },
-                        modifier = Modifier
-                            .size(68.dp)
-                            .background(White, CircleShape)
-                    ) {
-                        Icon(Icons.Filled.Camera, contentDescription = "Chụp", tint = Ink900, modifier = Modifier.size(32.dp))
-                    }
+                        modifier = Modifier.size(68.dp).background(Color.White, CircleShape)
+                    ) { Icon(Icons.Filled.Camera, contentDescription = null, tint = Color.Black, modifier = Modifier.size(32.dp)) }
                 }
 
-                // Flash button
-                IconButton(
-                    onClick = { flashEnabled = !flashEnabled },
-                    modifier = Modifier
-                        .size(52.dp)
-                        .background(SurfaceCard.copy(alpha = 0.8f), RoundedCornerShape(14.dp))
-                        .border(
-                            1.dp,
-                            if (flashEnabled) Amber400 else SurfaceBorder,
-                            RoundedCornerShape(14.dp)
-                        )
-                ) {
-                    Icon(
-                        if (flashEnabled) Icons.Filled.FlashOn else Icons.Filled.FlashOff,
-                        contentDescription = "Flash",
-                        tint = if (flashEnabled) Amber400 else White
-                    )
+                IconButton(onClick = { flashEnabled = !flashEnabled }, modifier = Modifier.size(52.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(14.dp)).border(1.dp, if (flashEnabled) Color.Yellow else Color.White.copy(alpha = 0.3f), RoundedCornerShape(14.dp))) {
+                    Icon(if (flashEnabled) Icons.Filled.FlashOn else Icons.Filled.FlashOff, contentDescription = null, tint = if (flashEnabled) Color.Yellow else Color.White)
                 }
             }
-
-            Spacer(Modifier.height(8.dp))
-            Text("Nhấn nút để chụp ảnh", color = White.copy(alpha = 0.6f), fontSize = 12.sp)
         }
     }
 }
 
 @Composable
-private fun ImagePreviewContent(
-    imageUri: Uri,
-    onOCR: () -> Unit,
-    onRetake: () -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize().background(Ink900)) {
-        // Preview image
-        AsyncImage(
-            model = imageUri,
-            contentDescription = "Ảnh xem trước",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
+private fun ImagePreviewContent(imageUris: List<Uri>, onOCR: () -> Unit, onRetake: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        if (imageUris.size == 1) {
+            AsyncImage(model = imageUris[0], contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        } else {
+            LazyRow(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                items(imageUris) { uri ->
+                    AsyncImage(model = uri, contentDescription = null, modifier = Modifier.fillParentMaxWidth().clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.FillWidth)
+                }
+            }
+        }
 
-        // Dark gradient at bottom
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(220.dp)
-                .background(
-                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)))
-                )
-        )
-
-        // Bottom actions
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "Ảnh đã chọn",
-                color = White.copy(alpha = 0.8f),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Nhấn OCR để nhận dạng hoặc chụp lại",
-                color = White.copy(alpha = 0.5f),
-                fontSize = 12.sp
-            )
-            Spacer(Modifier.height(24.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+        Column(modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().fillMaxWidth().padding(horizontal = 24.dp, vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (imageUris.size > 1) {
+                Surface(color = Color.Black.copy(alpha = 0.6f), shape = RoundedCornerShape(20.dp)) {
+                    Text(stringResource(R.string.images_selected, imageUris.size), color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), fontSize = 14.sp)
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
-                    onClick = onRetake,
-                    modifier = Modifier.weight(1f).height(54.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = White),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, White.copy(alpha = 0.4f)),
+                    onClick = onRetake, 
+                    modifier = Modifier.weight(1f).height(54.dp), 
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White), 
+                    border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.4f)), 
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Chụp lại", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.retake))
                 }
                 Button(
-                    onClick = onOCR,
-                    modifier = Modifier.weight(1f).height(54.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Teal400, contentColor = Ink900),
+                    onClick = onOCR, 
+                    modifier = Modifier.weight(1f).height(54.dp), 
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary, 
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ), 
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Icon(Icons.Outlined.DocumentScanner, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("OCR", color = Color.Black, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
+                    Text("OCR", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
                 }
             }
-        }
-
-        // Top back button
-        IconButton(
-            onClick = onRetake,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(16.dp)
-                .size(44.dp)
-                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-        ) {
-            Icon(Icons.Filled.ArrowBack, contentDescription = "Quay lại", tint = White)
         }
     }
 }
 
 @Composable
-private fun PermissionRequest(
-    onRequest: () -> Unit,
-    onGallery: () -> Unit,
-    onBack: () -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = Teal400, modifier = Modifier.size(64.dp))
+private fun PermissionRequest(onRequest: () -> Unit, onGallery: () -> Unit, onBack: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Outlined.CameraAlt, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(64.dp))
         Spacer(Modifier.height(20.dp))
-        Text("Cần quyền truy cập Camera", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text("Cho phép ứng dụng dùng camera để chụp ảnh văn bản", color = TextSecondary, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(stringResource(R.string.permission_camera), color = MaterialTheme.colorScheme.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(32.dp))
         Button(
-            onClick = onRequest,
+            onClick = onRequest, 
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Teal400, contentColor = Ink900),
-            shape = RoundedCornerShape( 14.dp)
-        ) { Text("Cấp quyền Camera",color = Color.Black,  fontWeight = FontWeight.Bold) }
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) { 
+            Text("Cấp quyền Camera", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) 
+        }
         Spacer(Modifier.height(12.dp))
         OutlinedButton(
-            onClick = onGallery,
+            onClick = onGallery, 
             modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Teal400),
-            border = androidx.compose.foundation.BorderStroke(1.5.dp, Teal400),
-            shape = RoundedCornerShape(14.dp)
-        ) { Text("Chọn từ thư viện", fontWeight = FontWeight.SemiBold) }
-        Spacer(Modifier.height(12.dp))
-        TextButton(onClick = onBack) { Text("Quay lại", color = TextSecondary) }
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+        ) { 
+            Text(stringResource(R.string.gallery), color = MaterialTheme.colorScheme.primary) 
+        }
     }
 }
 
 @Composable
 private fun ErrorContent(message: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(Icons.Filled.ErrorOutline, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(64.dp))
+    Column(modifier = Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Filled.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(64.dp))
         Spacer(Modifier.height(16.dp))
-        Text("Đã có lỗi xảy ra", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text(message, color = TextSecondary, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text(stringResource(R.string.error_occurred), color = MaterialTheme.colorScheme.onSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(32.dp))
         Button(
-            onClick = onRetry,
-            colors = ButtonDefaults.buttonColors(containerColor = Teal400, contentColor = Ink900),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth().height(52.dp)
-        ) { Text("Thử lại", fontWeight = FontWeight.Bold) }
+            onClick = onRetry, 
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) { 
+            Text(stringResource(R.string.retry), color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) 
+        }
     }
 }

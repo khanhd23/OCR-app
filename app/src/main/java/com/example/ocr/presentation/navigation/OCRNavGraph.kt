@@ -10,6 +10,7 @@ import com.example.ocr.presentation.feature.camera.CameraScreen
 import com.example.ocr.presentation.feature.history.HistoryScreen
 import com.example.ocr.presentation.feature.intro.IntroScreen
 import com.example.ocr.presentation.feature.result.ResultScreen
+import com.example.ocr.presentation.feature.settings.SettingsScreen
 import com.example.ocr.presentation.feature.splash.SplashScreen
 
 @Composable
@@ -36,7 +37,8 @@ fun OCRNavGraph() {
         composable(Screen.Intro.route) {
             IntroScreen(
                 onNavigateToCamera = { navController.navigate(Screen.Camera.route) },
-                onNavigateToHistory = { navController.navigate(Screen.History.route) }
+                onNavigateToHistory = { navController.navigate(Screen.History.route) },
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
             )
         }
 
@@ -73,6 +75,12 @@ fun OCRNavGraph() {
                 onOpenDocument = { docId ->
                     navController.navigate(Screen.Result.createRoute(docId))
                 }
+            )
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

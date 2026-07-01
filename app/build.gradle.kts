@@ -96,4 +96,5 @@ dependencies {
     implementation(libs.accompanist.permissions)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.datastore.preferences)
 }

@@ -5,6 +5,7 @@ sealed class Screen(val route: String) {
     object Intro : Screen("intro")
     object Camera : Screen("camera")
     object History : Screen("history")
+    object Settings : Screen("settings")
 
     object Result : Screen("result/{documentId}") {
         const val ARG_DOCUMENT_ID = "documentId"

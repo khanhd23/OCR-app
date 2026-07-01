@@ -15,7 +15,8 @@ interface OCRApi {
     @POST(Constants.OCR_BATCH_ENDPOINT)
     suspend fun uploadLineBatch(
         @Part lines: List<MultipartBody.Part>,
-        @Part("page_index") pageIndex: Int = 0
+        @Part("page_index") pageIndex: Int = 0,
+        @Part("model") model: String = "mlkit"
     ): Response<PageOCRResponseDto>
 
     @Headers("ngrok-skip-browser-warning: 69420")

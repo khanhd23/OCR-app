@@ -33,6 +33,9 @@ interface OCRDao {
     @Query("DELETE FROM ${Constants.OCR_TABLE} WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("DELETE FROM ${Constants.OCR_TABLE}")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM ${Constants.OCR_TABLE} WHERE fullText LIKE '%' || :query || '%' OR title LIKE '%' || :query || '%'")
     suspend fun search(query: String): List<OCREntity>
 }

@@ -13,10 +13,13 @@ import com.example.ocr.data.remote.dto.ExportWordRequest
 import com.example.ocr.data.remote.mapper.toDomain
 import com.example.ocr.domain.model.OCRDocument
 import com.example.ocr.domain.model.OCRResult
+import com.example.ocr.domain.repository.OCRModel
 import com.example.ocr.domain.repository.OCRRepository
+import com.example.ocr.domain.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -32,6 +35,7 @@ class OCRRepositoryImpl @Inject constructor(
     private val api: OCRApi,
     private val dao: OCRDao,
     private val packer: LineImagePacker,
+    private val settingsRepository: SettingsRepository,
     @ApplicationContext private val context: Context,
 ) : OCRRepository {
 
@@ -40,6 +44,7 @@ class OCRRepositoryImpl @Inject constructor(
         pageIndex: Int
     ): Resource<OCRResult> = withContext(Dispatchers.Default) {
         try {
+            val currentModel = settingsRepository.getOCRModel().first()
             val packed = packer.packForUpload(bitmap)
 
             if (packed.parts.isEmpty()) {
@@ -51,12 +56,22 @@ class OCRRepositoryImpl @Inject constructor(
             val response = withContext(Dispatchers.IO) {
                 api.uploadLineBatch(
                     lines = packed.parts,
-                    pageIndex = pageIndex
+                    pageIndex = pageIndex,
+                    model = currentModel.name.lowercase()
                 )
             }
 
             if (response.isSuccessful && response.body()?.success == true) {
-                Resource.Success(response.body()!!.toDomain())
+                val result = response.body()!!.toDomain()
+                
+                // Kiểm tra cài đặt lưu lịch sử
+                val shouldSave = settingsRepository.isHistoryEnabled().first()
+                if (shouldSave) {
+                    // Logic lưu vào DB sẽ được gọi từ ViewModel hoặc tại đây
+                    // Ở đây mình trả về kết quả, ViewModel sẽ quyết định lưu hay không
+                }
+                
+                Resource.Success(result)
             } else {
                 Resource.Error(
                     response.body()?.message

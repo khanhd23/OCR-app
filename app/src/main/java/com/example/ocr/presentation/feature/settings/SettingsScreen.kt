@@ -223,13 +223,13 @@ fun SettingsScreen(
                 SettingsItem(
                     icon = Icons.Default.Info,
                     title = stringResource(R.string.version),
-                    subtitle = "1.0.0 (Internship Pro)",
+                    subtitle = "1.0.0",
                     onClick = {}
                 )
                 SettingsItem(
                     icon = Icons.Default.Code,
                     title = stringResource(R.string.developed_by),
-                    subtitle = "Android Intern Candidate",
+                    subtitle = "Android Developer",
                     onClick = {}
                 )
             }

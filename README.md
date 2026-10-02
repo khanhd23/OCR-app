@@ -1,93 +1,112 @@
-# 📱 OCR Pro - Smart Text Recognition System
+# OCR Pro - Smart Text Recognition
 
-**OCR Pro** là một ứng dụng Android chuyên nghiệp, hiệu suất cao được thiết kế để trích xuất văn bản từ hình ảnh và tài liệu một cách chính xác nhất. Dự án được xây dựng với mục tiêu thực hành các tiêu chuẩn phát triển Android hiện đại nhất, sẵn sàng cho môi trường doanh nghiệp.
+[![Android CI](https://github.com/dangkimkhanh/OCR-app/actions/workflows/android.yml/badge.svg)](https://github.com/dangkimkhanh/OCR-app/actions/workflows/android.yml)
 
----
+Ứng dụng Android trích xuất văn bản từ ảnh chụp hoặc ảnh trong thư viện. App tiền xử lý ảnh ngay trên thiết bị: phát hiện từng dòng chữ bằng ML Kit, gộp các mảnh dòng bị đứt và nắn phối cảnh từng dòng, sau đó gửi các dòng đã chuẩn hoá lên server để nhận dạng (ML Kit hoặc TrOCR). Kết quả được lưu lại, có thể tìm kiếm, sao chép và xuất ra file Word.
 
-## 🌟 Tính năng nổi bật
+## Ảnh chụp màn hình
 
-- **⚡ OCR Thời gian thực:** Sử dụng CameraX và Google ML Kit để nhận diện văn bản tức thì với tốc độ khung hình cao.
-- **🖼️ Xử lý ảnh từ thư viện:** Hỗ trợ nhập ảnh từ Gallery, xử lý và trích xuất nội dung văn bản.
-- **📝 Xuất tài liệu chuyên nghiệp:** Tích hợp API Server để chuyển đổi văn bản đã quét thành định dạng **Microsoft Word (.docx)**.
-- **📚 Quản lý lịch sử thông minh:** Lưu trữ và tìm kiếm các bản quét cũ cục bộ bằng Room Database.
-- **🌍 Đa ngôn ngữ (Localization):** Hỗ trợ đầy đủ các ngôn ngữ: **Tiếng Việt, Tiếng Anh, Tiếng Trung**.
-- **🎨 Giao diện linh hoạt:** 
-  - Chế độ **Dark Mode** và **Light Mode** tùy chỉnh hoặc theo hệ thống.
-  - Thiết kế theo ngôn ngữ Material 3 hiện đại.
-- **⚙️ Cấu hình nâng cao:** 
-  - Lựa chọn mô hình OCR (Google ML Kit vs TrOCR).
-  - Tùy chọn bật/tắt tự động lưu lịch sử.
-  - Quản lý bộ nhớ (Xóa toàn bộ lịch sử).
-
----
-
-## 🛠 Tech Stack & Kiến trúc
-
-Dự án áp dụng mô hình **Clean Architecture** phân lớp nghiêm ngặt kết hợp với **MVVM**, đảm bảo tính **Testability** và **Scalability**.
-
-### Công nghệ lõi:
-- **Ngôn ngữ:** Kotlin 100% (Coroutines & Flow cho lập trình bất đồng bộ).
-- **Giao diện:** Jetpack Compose (Declarative UI).
-- **Dependency Injection:** Hilt (Dagger) - Quản lý vòng đời object chuyên nghiệp.
-- **Lưu trữ dữ liệu:**
-  - **Room DB:** Lưu trữ dữ liệu cấu trúc (Lịch sử OCR).
-  - **DataStore Preferences:** Lưu trữ cấu hình người dùng (Theme, Language, Settings).
-- **Xử lý ảnh & AI:**
-  - **CameraX:** Chụp ảnh và phân tích luồng video.
-  - **ML Kit:** Engine nhận dạng văn bản offline nhanh chóng.
-- **Networking:** Retrofit 2 & OkHttp 4 (Xử lý API upload & download file).
-- **Khác:** Coil (Load ảnh), Navigation Compose, Splash Screen API, Accompanist.
+<table>
+  <tr>
+    <th width="33%">Màn hình chính</th>
+    <th width="33%">Chụp ảnh</th>
+    <th width="33%">Cài đặt</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/home.jpg" width="240" height="533" alt="Màn hình chính"></td>
+    <td align="center"><img src="docs/images/camera.jpg" width="240" height="533" alt="Màn hình chụp ảnh"></td>
+    <td align="center"><img src="docs/images/settings.jpg" width="240" height="533" alt="Màn hình cài đặt"></td>
+  </tr>
+</table>
 
 ---
 
-## 🏗 Cấu trúc dự án (Project Structure)
+## Tính năng
+
+- **Chụp ảnh / chọn nhiều ảnh:** dùng CameraX (chế độ chất lượng cao) hoặc chọn nhiều ảnh từ thư viện. Mỗi ảnh là một trang.
+- **OCR nhiều trang:** hiển thị tiến độ theo từng trang. Nếu một trang lỗi, các trang còn lại vẫn được xử lý.
+- **Pipeline tiền xử lý trên thiết bị** (xem bên dưới).
+- **Chọn mô hình nhận dạng:** Google ML Kit hoặc TrOCR (xử lý phía server).
+- **Lịch sử:** lưu bằng Room, có tìm kiếm theo tiêu đề/nội dung (debounce 300ms) và xoá.
+- **Xuất Word (.docx):** server sinh file, app tải về và chia sẻ qua `FileProvider`.
+- **6 ngôn ngữ giao diện:** Tiếng Việt, English, Français, 日本語, 한국어, 中文.
+- **Theme:** Light / Dark / theo hệ thống, Material 3, Splash Screen API.
+
+## Pipeline nhận dạng
+
+```text
+Ảnh gốc
+  └─ ImagePreprocessor      tăng tương phản (ColorMatrix)
+      └─ ML Kit             phát hiện các dòng chữ + 4 góc của mỗi dòng
+          └─ LineGeometry   lọc nhiễu → bỏ box nằm lọt trong box khác
+                            → gộp mảnh cùng dòng (kể cả dòng nghiêng)
+                            → sắp xếp theo thứ tự đọc
+              └─ Perspective warp từng dòng (Matrix.setPolyToPoly)
+                  └─ Upload batch JPEG các dòng → server OCR → text
+```
+
+Nếu ở kích thước gốc không phát hiện được dòng nào, ảnh được phóng to 2x rồi thử lại. Logic hình học nằm trong [`LineGeometry`](app/src/main/java/com/example/ocr/data/local/processor/LineGeometry.kt), viết bằng Kotlin thuần (không phụ thuộc Android) nên chạy unit test được trên JVM.
+
+---
+
+## Tech Stack
+
+| Hạng mục | Công nghệ |
+| --- | --- |
+| Ngôn ngữ | Kotlin, Coroutines, Flow |
+| UI | Jetpack Compose, Material 3, Navigation Compose |
+| Kiến trúc | Clean Architecture (data / domain / presentation) + MVVM, `StateFlow` |
+| DI | Hilt |
+| Camera & Vision | CameraX, Google ML Kit Text Recognition |
+| Lưu trữ | Room (lịch sử), DataStore Preferences (cài đặt) |
+| Network | Retrofit, OkHttp (multipart upload, tải file) |
+| Test | JUnit4, MockK, kotlinx-coroutines-test |
+| CI | GitHub Actions (unit test + build APK) |
+
+## Cấu trúc dự án
 
 ```text
 com.example.ocr/
-├── core/               # Common utilities, DI Modules, Constants, Extensions
-├── data/               # Data Layer: Repositories Impl, Local DB (Room), DataStore, Remote API
-├── domain/             # Domain Layer: Business Models, Repository Interfaces, UseCases
-├── presentation/       # UI Layer:
-│   ├── feature/        # Feature-based screens (Splash, Intro, Camera, History, Result, Settings)
-│   ├── component/      # Reusable UI components
-│   ├── navigation/     # NavHost & Screen definitions
-│   └── theme/          # Material 3 Design System (Color, Type, Shape, Theme)
-└── OCRApplication.kt   # Hilt Application class
+├── core/           # DI modules, network, constants, extensions
+├── data/
+│   ├── local/      # Room DB, image processors (ML Kit, LineGeometry, packer)
+│   ├── remote/     # DTO + mapper
+│   └── repository/ # Repository implementations
+├── domain/         # Models, repository interfaces, use cases
+└── presentation/   # Compose screens + ViewModels, navigation, theme
 ```
 
 ---
 
-## 🚀 Hướng dẫn cài đặt
+## Chạy dự án
 
-1. **Yêu cầu:** Android Studio Ladybug (2024.2.1) trở lên.
-2. **Clone dự án:**
+1. Yêu cầu Android Studio Ladybug (2024.2.1) trở lên, JDK 17, thiết bị/emulator API 24+.
+2. Clone:
    ```bash
-   git clone https://github.com/yourusername/ocr-pro.git
+   git clone https://github.com/dangkimkhanh/OCR-app.git
    ```
-3. **Mở dự án:** Chọn thư mục `Fe Mobile OCR` trong Android Studio.
-4. **Cấu hình API (Tùy chọn):** 
-   Cập nhật `BASE_URL` trong `Constants.kt` nếu bạn muốn sử dụng tính năng Xuất Word với Server riêng.
-5. **Build & Run:** Sử dụng thiết bị Android thực (API 24+) để có trải nghiệm Camera tốt nhất.
+3. Cấu hình địa chỉ server OCR trong `local.properties` (file này không commit lên git):
+   ```properties
+   ocr.baseUrl=http://192.168.1.10:8000/
+   ```
+   Nếu bỏ trống, mặc định là `http://10.0.2.2:8000/` (tức localhost của máy host khi chạy trên Android Emulator). HTTP thường chỉ được phép ở bản debug.
+4. Build & Run. Chạy test:
+   ```bash
+   ./gradlew :app:testDebugUnitTest
+   ```
+
+### API server cần cung cấp
+
+| Endpoint | Request | Response |
+| --- | --- | --- |
+| `POST api/ocr/batch` | multipart: `lines[]` (JPEG), `page_index`, `model` (`mlkit` / `trocr`) | `{ success, pageIndex, total, results: [string], message }` |
+| `POST api/export/word` | JSON `{ filename, content: [string] }` | file `.docx` |
 
 ---
 
-## 📸 Ảnh chụp màn hình
+## Điểm kỹ thuật
 
-| 🚀 Splash & Intro | 📸 Camera Scan | 📄 OCR Result | ⚙️ Settings |
-| :---: | :---: | :---: | :---: |
-| ![Splash](https://via.placeholder.com/150x300) | ![Camera](https://via.placeholder.com/150x300) | ![Result](https://via.placeholder.com/150x300) | ![Settings](https://via.placeholder.com/150x300) |
-
----
-
-## 💡 Tư duy phát triển (Key Takeaways)
-- Áp dụng **SOLID principles** vào việc thiết kế Repository và UseCase.
-- Xử lý **Memory Management** khi làm việc với Bitmap (Recycle đúng lúc để tránh OOM).
-- Tối ưu **UI UX** với các hiệu ứng AnimatedVisibility và Shimmer Loading.
-- Quản lý **State** chặt chẽ bằng `StateFlow` và `collectAsStateWithLifecycle`.
-
----
-
-**Phát triển bởi:** [Tên của bạn]
-**Vị trí:** Android Intern Candidate
-**Email:** [Email của bạn]
-**LinkedIn:** [Link của bạn]
+- Gộp các mảnh dòng nghiêng bằng cách so cao độ mép phải của mảnh trái với mép trái của mảnh phải, thay vì chỉ so độ chồng lấn của bounding box.
+- Recycle Bitmap ngay sau khi nén JPEG / khi đổi ảnh để tránh OOM khi xử lý nhiều trang.
+- Các màn hình OCR, kết quả, lịch sử đi qua tầng UseCase; ViewModel và logic hình học có unit test.
+- Chỉ log request/response khi chạy bản debug; URL server cấu hình qua `BuildConfig`.

@@ -1,6 +1,6 @@
 # OCR Pro - Smart Text Recognition
 
-[![Android CI](https://github.com/dangkimkhanh/OCR-app/actions/workflows/android.yml/badge.svg)](https://github.com/dangkimkhanh/OCR-app/actions/workflows/android.yml)
+[![Android CI](https://github.com/khanhd23/OCR-app/actions/workflows/android.yml/badge.svg)](https://github.com/khanhd23/OCR-app/actions/workflows/android.yml)
 
 Ứng dụng Android trích xuất văn bản từ ảnh chụp hoặc ảnh trong thư viện. App tiền xử lý ảnh ngay trên thiết bị: phát hiện từng dòng chữ bằng ML Kit, gộp các mảnh dòng bị đứt và nắn phối cảnh từng dòng, sau đó gửi các dòng đã chuẩn hoá lên server để nhận dạng (ML Kit hoặc TrOCR). Kết quả được lưu lại, có thể tìm kiếm, sao chép và xuất ra file Word.
 
@@ -83,7 +83,7 @@ com.example.ocr/
 1. Yêu cầu Android Studio Ladybug (2024.2.1) trở lên, JDK 17, thiết bị/emulator API 24+.
 2. Clone:
    ```bash
-   git clone https://github.com/dangkimkhanh/OCR-app.git
+   git clone https://github.com/khanhd23/OCR-app.git
    ```
 3. Cấu hình địa chỉ server OCR trong `local.properties` (file này không commit lên git):
    ```properties

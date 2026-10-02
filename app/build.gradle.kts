@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,17 @@ plugins {
     kotlin("kapt")
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
 }
+
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+// URL của OCR server; ghi đè bằng `ocr.baseUrl=...` trong local.properties
+// hoặc `-Pocr.baseUrl=...`. Mặc định trỏ tới localhost của máy host từ Android Emulator.
+val ocrBaseUrl: String = (project.findProperty("ocr.baseUrl") as String?)
+    ?: localProps.getProperty("ocr.baseUrl")
+    ?: "http://10.0.2.2:8000/"
 
 android {
     namespace = "com.example.ocr"
@@ -18,10 +31,16 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "BASE_URL", "\"$ocrBaseUrl\"")
     }
 
     buildTypes {
+        debug {
+            // Cho phép HTTP thường khi dev với server local
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
         release {
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -38,6 +57,10 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 
 }
@@ -85,13 +108,8 @@ dependencies {
     // Utilities
     implementation(libs.coil.compose)
     // Testing
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.accompanist.permissions)
     implementation(libs.lifecycle.runtime.compose)

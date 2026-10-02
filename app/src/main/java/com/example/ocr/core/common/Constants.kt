@@ -1,8 +1,11 @@
 package com.example.ocr.core.common
 
+import com.example.ocr.BuildConfig
+
 object Constants {
     // Network
-    const val BASE_URL = "https://5476-34-50-177-248.ngrok-free.app/"   // http://192.168.0.104:8000/
+    // Cấu hình qua `ocr.baseUrl` trong local.properties (xem README)
+    val BASE_URL: String = BuildConfig.BASE_URL
     const val OCR_ENDPOINT          = "api/ocr/"
     const val OCR_BATCH_ENDPOINT    = "api/ocr/batch"
     const val EXPORT_WORD_ENDPOINT  = "api/export/word"

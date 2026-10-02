@@ -1,5 +1,6 @@
 package com.example.ocr.core.di
 
+import com.example.ocr.BuildConfig
 import com.example.ocr.core.common.Constants
 import com.example.ocr.core.network.OCRApi
 import com.example.ocr.core.network.RetrofitFactory
@@ -21,7 +22,8 @@ object NetworkModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
+                    else HttpLoggingInterceptor.Level.NONE
         }
         return OkHttpClient.Builder()
             .addInterceptor(logging)

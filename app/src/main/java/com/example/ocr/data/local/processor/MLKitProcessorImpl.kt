@@ -14,7 +14,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -36,11 +35,6 @@ class MLKitProcessorImpl @Inject constructor() {
     private val PAD_RIGHT  = 20
     private val PAD_TOP    = 20
     private val PAD_BOTTOM = 20
-
-    private val MERGE_GAP_X          = 50
-    private val STRAIGHT_OVERLAP_MIN = 0.80f
-    private val TILT_THRESHOLD       = 4
-    private val TILT_JOIN_TOLERANCE  = 0.25f
 
     // Public API
     suspend fun detectAndWarpLines(bitmap: Bitmap): List<LineResult> {
@@ -74,162 +68,46 @@ class MLKitProcessorImpl @Inject constructor() {
 
         val rawLines = mlResult.textBlocks
             .flatMap { it.lines }
-            .filter { isValidTextLine(it, imgW, imgH) }
+            .mapNotNull { it.toDetectedLine() }
+            .filter { LineGeometry.isValidTextLine(it, imgW, imgH) }
 
-        val filtered = filterStrictlyContainedBoxes(rawLines)
-        val merged   = mergeLines(filtered)
-
-        val sorted = merged.sortedWith(
-            compareBy<List<Text.Line>> {
-                it.mapNotNull { l -> l.boundingBox?.top }.minOrNull()?.div(10) ?: 0
-            }.thenBy {
-                it.mapNotNull { l -> l.boundingBox?.left }.minOrNull() ?: 0
-            }
-        )
+        val filtered = LineGeometry.filterStrictlyContained(rawLines)
+        val merged   = LineGeometry.mergeLines(filtered)
+        val sorted   = LineGeometry.sortReadingOrder(merged)
 
         return sorted.mapNotNull { buildLineResult(bitmap, it, scaleFactor) }
-    }
-
-    // Merge line
-    private fun mergeLines(lines: List<Text.Line>): List<List<Text.Line>> {
-        if (lines.isEmpty()) return emptyList()
-        val sorted = lines.sortedWith(
-            compareBy<Text.Line> { it.boundingBox?.left ?: 0 }
-                .thenBy { it.boundingBox?.top ?: 0 }
-        )
-
-        val groups = mutableListOf<MutableList<Text.Line>>()
-
-        outer@ for (line in sorted) {
-            for (group in groups) {
-                val last = group.last()
-                if (canMerge(last, line)) {
-                    group.add(line)
-                    continue@outer
-                }
-            }
-            groups.add(mutableListOf(line))
-        }
-
-        return groups
-    }
-
-
-    private fun canMerge(left: Text.Line, right: Text.Line): Boolean {
-        val leftBox  = left.boundingBox  ?: return false
-        val rightBox = right.boundingBox ?: return false
-
-        val gapX = rightBox.left - leftBox.right
-        if (gapX > MERGE_GAP_X) return false
-        if (gapX < -leftBox.width() * 0.5f) return false
-
-        val avgHeight = ((leftBox.height()) + (rightBox.height())) / 2f
-        if (avgHeight < 1f) return false
-
-        val leftCorners  = left.cornerPoints
-        val rightCorners = right.cornerPoints
-
-        val leftTilt  = if (leftCorners  != null && leftCorners.size  == 4) abs(leftCorners[0].y  - leftCorners[1].y)  else 0
-        val rightTilt = if (rightCorners != null && rightCorners.size == 4) abs(rightCorners[0].y - rightCorners[1].y) else 0
-        val isStraight = leftTilt <= TILT_THRESHOLD && rightTilt <= TILT_THRESHOLD
-
-        return if (isStraight) {
-            checkStraightOverlap(leftBox, rightBox, avgHeight)
-        } else {
-            checkTiltedJoin(leftBox, leftCorners, rightBox, rightCorners, avgHeight)
-        }
-    }
-
-
-    private fun checkStraightOverlap(leftBox: Rect, rightBox: Rect, avgHeight: Float): Boolean {
-        val overlapTop    = max(leftBox.top,    rightBox.top)
-        val overlapBottom = min(leftBox.bottom, rightBox.bottom)
-        val overlap       = (overlapBottom - overlapTop).coerceAtLeast(0)
-        return overlap >= avgHeight * STRAIGHT_OVERLAP_MIN
-    }
-
-    private fun checkTiltedJoin(
-        leftBox: Rect, leftCorners: Array<Point>?,
-        rightBox: Rect, rightCorners: Array<Point>?,
-        avgHeight: Float,
-    ): Boolean {
-        if (leftCorners == null || leftCorners.size != 4 ||
-            rightCorners == null || rightCorners.size != 4) {
-            return checkStraightOverlap(leftBox, rightBox, avgHeight)
-        }
-
-        val leftRightEdgeMidY  = (leftCorners[1].y  + leftCorners[2].y)  / 2f
-        val rightLeftEdgeMidY  = (rightCorners[0].y + rightCorners[3].y) / 2f
-
-        val yDiff = abs(leftRightEdgeMidY - rightLeftEdgeMidY)
-        return yDiff <= avgHeight * TILT_JOIN_TOLERANCE
     }
 
     // Build LineResult
     private fun buildLineResult(
         bitmap: Bitmap,
-        group: List<Text.Line>,
+        group: List<DetectedLine>,
         scaleFactor: Float,
     ): LineResult? {
         if (group.isEmpty()) return null
 
-        if (group.size == 1) {
-            val line    = group[0]
-            val box     = line.boundingBox ?: return null
-            val corners = line.cornerPoints
-            val warped  = if (corners != null && corners.size == 4)
-                warpLinePerspective(bitmap, corners)
-            else
-                cropWithPad(bitmap, box)
-            return LineResult(warpedBitmap = warped, boundingBox = scaleBox(box, scaleFactor))
-        }
+        val mergedBox = group.map { it.box }.reduce { acc, b -> acc.union(b) }
+        val quad = if (group.size == 1) group[0].quad else LineGeometry.mergedQuad(group)
 
-        val allBoxes = group.mapNotNull { it.boundingBox }
-        val mergedBox = allBoxes.reduce { acc, r ->
-            Rect(min(acc.left, r.left), min(acc.top, r.top), max(acc.right, r.right), max(acc.bottom, r.bottom))
-        }
+        val warped = if (quad != null)
+            warpLinePerspective(bitmap, quad.map { Point(it.x, it.y) }.toTypedArray())
+        else
+            cropWithPad(bitmap, mergedBox.toRect())
 
-        val allCorners = group.mapNotNull { it.cornerPoints?.takeIf { c -> c.size == 4 } }
-
-        val warped = if (allCorners.size == group.size) {
-            val tl = allCorners.minBy { it[0].x + it[0].y }[0]
-            val tr = allCorners.maxBy { it[1].x - it[1].y }[1]
-            val br = allCorners.maxBy { it[2].x + it[2].y }[2]
-            val bl = allCorners.minBy { it[3].x - it[3].y }[3]
-            warpLinePerspective(bitmap, arrayOf(tl, tr, br, bl))
-        } else {
-            cropWithPad(bitmap, mergedBox)
-        }
-
-        return LineResult(warpedBitmap = warped, boundingBox = scaleBox(mergedBox, scaleFactor))
+        return LineResult(warpedBitmap = warped, boundingBox = scaleBox(mergedBox.toRect(), scaleFactor))
     }
 
     // Helpers
-    private fun filterStrictlyContainedBoxes(lines: List<Text.Line>): List<Text.Line> {
-        if (lines.isEmpty()) return emptyList()
-        val sortedByArea = lines.sortedByDescending {
-            val b = it.boundingBox ?: return@sortedByDescending 0
-            b.width() * b.height()
-        }
-        val result = mutableListOf<Text.Line>()
-        for (current in sortedByArea) {
-            val currentBox = current.boundingBox ?: continue
-            val isContained = result.any { it.boundingBox?.contains(currentBox) == true }
-            if (!isContained) result.add(current)
-        }
-        return result
+    private fun Text.Line.toDetectedLine(): DetectedLine? {
+        val b = boundingBox ?: return null
+        return DetectedLine(
+            text    = text,
+            box     = Box(b.left, b.top, b.right, b.bottom),
+            corners = cornerPoints?.map { Pt(it.x, it.y) },
+        )
     }
 
-    private fun isValidTextLine(line: Text.Line, imgW: Int, imgH: Int): Boolean {
-        val box  = line.boundingBox ?: return false
-        val text = line.text.trim()
-        if (text.length < 2) return false
-        if (!text.any { it.isLetterOrDigit() }) return false
-        if (box.height() < 8 || box.height() > imgH / 3) return false
-        if (box.width() < imgW * 0.03f) return false
-        val alphaRatio = text.count { it.isLetterOrDigit() }.toFloat() / text.length
-        return alphaRatio >= 0.3f
-    }
+    private fun Box.toRect() = Rect(left, top, right, bottom)
 
     private fun scaleBox(box: Rect, scaleFactor: Float): Rect =
         if (scaleFactor == 1f) box else Rect(

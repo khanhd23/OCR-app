@@ -5,9 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ocr.core.common.Resource
 import com.example.ocr.domain.model.OCRDocument
-import com.example.ocr.domain.repository.OCRRepository
 import com.example.ocr.domain.usecase.DeleteDocumentUseCase
 import com.example.ocr.domain.usecase.ExportWordUseCase
+import com.example.ocr.domain.usecase.GetDocumentByIdUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +31,7 @@ sealed class ExportState {
 
 @HiltViewModel
 class ResultViewModel @Inject constructor(
-    private val ocrRepository: OCRRepository,
+    private val getDocumentByIdUseCase: GetDocumentByIdUseCase,
     private val exportWordUseCase: ExportWordUseCase,
     private val deleteDocumentUseCase: DeleteDocumentUseCase
 ) : ViewModel() {
@@ -47,7 +47,7 @@ class ResultViewModel @Inject constructor(
 
     fun loadDocument(id: Long) {
         viewModelScope.launch {
-            val doc = ocrRepository.getDocumentById(id)
+            val doc = getDocumentByIdUseCase(id)
             _uiState.value = if (doc != null)
                 ResultUiState.Success(doc)
             else

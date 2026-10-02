@@ -62,16 +62,7 @@ class OCRRepositoryImpl @Inject constructor(
             }
 
             if (response.isSuccessful && response.body()?.success == true) {
-                val result = response.body()!!.toDomain()
-                
-                // Kiểm tra cài đặt lưu lịch sử
-                val shouldSave = settingsRepository.isHistoryEnabled().first()
-                if (shouldSave) {
-                    // Logic lưu vào DB sẽ được gọi từ ViewModel hoặc tại đây
-                    // Ở đây mình trả về kết quả, ViewModel sẽ quyết định lưu hay không
-                }
-                
-                Resource.Success(result)
+                Resource.Success(response.body()!!.toDomain())
             } else {
                 Resource.Error(
                     response.body()?.message

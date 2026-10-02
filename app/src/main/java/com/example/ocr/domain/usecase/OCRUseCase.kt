@@ -30,6 +30,13 @@ class GetAllDocumentsUseCase @Inject constructor(
         ocrRepository.getAllDocuments()
 }
 
+class GetDocumentByIdUseCase @Inject constructor(
+    private val ocrRepository: OCRRepository
+) {
+    suspend operator fun invoke(id: Long): OCRDocument? =
+        ocrRepository.getDocumentById(id)
+}
+
 class DeleteDocumentUseCase @Inject constructor(
     private val ocrRepository: OCRRepository
 ) {

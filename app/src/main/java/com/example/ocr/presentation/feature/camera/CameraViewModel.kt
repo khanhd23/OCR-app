@@ -12,8 +12,8 @@ import com.example.ocr.core.common.Resource
 import com.example.ocr.core.extension.toFile
 import com.example.ocr.data.local.processor.MLKitProcessorImpl
 import com.example.ocr.domain.model.OCRDocument
-import com.example.ocr.domain.repository.OCRRepository
 import com.example.ocr.domain.usecase.SaveDocumentUseCase
+import com.example.ocr.domain.usecase.UploadBitmapUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +38,7 @@ sealed class CameraUiState {
 
 @HiltViewModel
 class CameraViewModel @Inject constructor(
-    private val ocrRepository: OCRRepository,
+    private val uploadBitmapUseCase: UploadBitmapUseCase,
     private val saveDocumentUseCase: SaveDocumentUseCase,
     private val mlKit: MLKitProcessorImpl
 ) : ViewModel() {
@@ -102,7 +102,7 @@ class CameraViewModel @Inject constructor(
                 )
 
                 val result = withContext(Dispatchers.Default) {
-                    ocrRepository.uploadBitmap(bitmap, index)
+                    uploadBitmapUseCase(bitmap, index)
                 }
 
                 if (result is Resource.Success) {
